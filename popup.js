@@ -144,3 +144,9 @@ elements.strictToggle.addEventListener("change", () => {
 refreshState()
   .then(startTimer)
   .catch((error) => setNotice(error.message));
+
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName === "local" && (changes.session_active || changes.end_time)) {
+    refreshState().catch((error) => setNotice(error.message));
+  }
+});

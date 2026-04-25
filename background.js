@@ -8,6 +8,7 @@ const DEFAULT_STATE = {
 };
 
 const RULE_ID_OFFSET = 1000;
+const SESSION_ALARM = "focuslock-session-expiry";
 
 const getState = () => chrome.storage.local.get(DEFAULT_STATE);
 
@@ -82,6 +83,23 @@ const applyBlockingRules = async (state) => {
   });
 };
 
+const scheduleSessionExpiry = async (endTime) => {
+  await chrome.alarms.clear(SESSION_ALARM);
+  if (endTime && Date.now() < endTime) {
+    await chrome.alarms.create(SESSION_ALARM, { when: endTime });
+  }
+};
+
+const expireSession = async () => {
+  await chrome.storage.local.set({
+    session_active: false,
+    start_time: null,
+    end_time: null
+  });
+  await chrome.alarms.clear(SESSION_ALARM);
+  await clearBlockingRules();
+};
+
 const saveSettings = async ({ blocked_sites, duration_minutes, strict_mode }) => {
   const state = await getState();
   if (state.session_active && state.strict_mode) {
@@ -97,6 +115,7 @@ const saveSettings = async ({ blocked_sites, duration_minutes, strict_mode }) =>
 
   const nextState = await getState();
   await applyBlockingRules(nextState);
+  await scheduleSessionExpiry(nextState.end_time);
   return nextState;
 };
 
@@ -126,6 +145,7 @@ const startSession = async ({ blocked_sites, duration_minutes, strict_mode }) =>
 
   const nextState = await getState();
   await applyBlockingRules(nextState);
+  await scheduleSessionExpiry(endTime);
   return nextState;
 };
 
@@ -141,6 +161,7 @@ const stopSession = async () => {
     end_time: null
   });
 
+  await chrome.alarms.clear(SESSION_ALARM);
   await clearBlockingRules();
   return getState();
 };
@@ -148,18 +169,25 @@ const stopSession = async () => {
 chrome.runtime.onInstalled.addListener(() => {
   chrome.storage.local.set(DEFAULT_STATE);
   clearBlockingRules();
+  chrome.alarms.clear(SESSION_ALARM);
 });
 
 chrome.runtime.onStartup.addListener(() => {
   chrome.storage.local.get(DEFAULT_STATE, async (state) => {
     if (!state.session_active || !state.end_time || Date.now() >= state.end_time) {
-      await chrome.storage.local.set({ session_active: false });
-      await clearBlockingRules();
+      await expireSession();
       return;
     }
 
     await applyBlockingRules(state);
+    await scheduleSessionExpiry(state.end_time);
   });
+});
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === SESSION_ALARM) {
+    expireSession();
+  }
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
