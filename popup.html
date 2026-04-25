@@ -8,8 +8,62 @@
   </head>
   <body>
     <main class="popup-shell">
-      <h1>FocusLock Web</h1>
-      <p>Extension setup is ready.</p>
+      <header class="popup-header">
+        <div>
+          <p class="eyebrow">FocusLock Web</p>
+          <h1>Focus Session</h1>
+        </div>
+        <span class="status-pill" id="statusPill">Inactive</span>
+      </header>
+
+      <section class="panel">
+        <label for="siteInput">Blocked websites</label>
+        <textarea id="siteInput" rows="5" placeholder="youtube.com&#10;instagram.com&#10;https://x.com/home"></textarea>
+        <p class="field-note">Add one domain or URL per line.</p>
+      </section>
+
+      <section class="control-grid">
+        <label class="field">
+          <span>Duration</span>
+          <select id="durationSelect">
+            <option value="15">15 min</option>
+            <option value="25" selected>25 min</option>
+            <option value="45">45 min</option>
+            <option value="60">60 min</option>
+            <option value="90">90 min</option>
+            <option value="120">120 min</option>
+          </select>
+        </label>
+
+        <label class="toggle-row" for="strictToggle">
+          <span>
+            <strong>Strict mode</strong>
+            <small>No edits or early stop while active.</small>
+          </span>
+          <input type="checkbox" id="strictToggle">
+        </label>
+      </section>
+
+      <section class="session-card">
+        <div>
+          <p class="session-label">Remaining</p>
+          <p class="timer" id="timerText">00:00</p>
+        </div>
+        <p class="session-copy" id="sessionCopy">No active session.</p>
+      </section>
+
+      <div class="button-row">
+        <button id="startButton" class="primary-button" type="button">Start Session</button>
+        <button id="stopButton" class="secondary-button" type="button">Stop</button>
+      </div>
+
+      <section class="sanity-panel">
+        <div class="sanity-header">
+          <h2>Sanity Check</h2>
+          <button id="sanityButton" type="button">Run</button>
+        </div>
+        <ol id="sanityList"></ol>
+      </section>
     </main>
     <script src="popup.js"></script>
   </body>
