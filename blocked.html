@@ -4,11 +4,19 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Site Blocked</title>
+    <link rel="stylesheet" href="blocked.css">
   </head>
   <body>
-    <main>
-      <h1>Site Blocked</h1>
-      <p>Your focus session is active.</p>
+    <main class="blocked-shell">
+      <section class="blocked-panel">
+        <p class="eyebrow">FocusLock Web</p>
+        <h1>Site Blocked</h1>
+        <p class="site-name" id="siteName">This website</p>
+        <p class="timer" id="blockedTimer">00:00</p>
+        <p class="message" id="blockedMessage">Your focus session is active.</p>
+        <button id="exitButton" type="button">End Session</button>
+      </section>
     </main>
+    <script src="blocked.js"></script>
   </body>
 </html>
