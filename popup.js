@@ -121,6 +121,34 @@ const saveDraftSettings = async () => {
   });
 };
 
+const renderSanityStep = ({ step, total, description, status }) => {
+  const item = document.createElement("li");
+  item.className = status.toLowerCase();
+  item.textContent = `Step ${step}/${total}: ${description} \u2192 ${status}`;
+  return item;
+};
+
+const runSanityCheck = async () => {
+  elements.sanityButton.disabled = true;
+  elements.sanityList.replaceChildren();
+
+  const runningItem = document.createElement("li");
+  runningItem.textContent = "Running Sanity Check...";
+  elements.sanityList.append(runningItem);
+
+  try {
+    const results = await sendMessage("runSanityCheck");
+    elements.sanityList.replaceChildren(...results.map(renderSanityStep));
+  } catch (error) {
+    const item = document.createElement("li");
+    item.className = "fail";
+    item.textContent = error.message;
+    elements.sanityList.replaceChildren(item);
+  } finally {
+    elements.sanityButton.disabled = false;
+  }
+};
+
 elements.startButton.addEventListener("click", () => {
   startSession().catch((error) => setNotice(error.message));
 });
@@ -139,6 +167,10 @@ elements.durationSelect.addEventListener("change", () => {
 
 elements.strictToggle.addEventListener("change", () => {
   saveDraftSettings().catch((error) => setNotice(error.message));
+});
+
+elements.sanityButton.addEventListener("click", () => {
+  runSanityCheck();
 });
 
 refreshState()

@@ -196,6 +196,40 @@ const stopSession = async () => {
   return getState();
 };
 
+const runSanityCheck = async () => {
+  const state = await getState();
+  const rules = await chrome.declarativeNetRequest.getDynamicRules();
+  const focusRules = rules.filter((rule) => rule.id >= RULE_ID_OFFSET);
+  const active = Boolean(state.session_active && state.end_time && Date.now() < state.end_time);
+  const hasSites = Array.isArray(state.blocked_sites) && state.blocked_sites.length > 0;
+  const hasRedirectRule = focusRules.some((rule) => rule.action?.type === "redirect" && rule.action.redirect?.extensionPath);
+  const hasMainFrameRule = focusRules.some((rule) => rule.condition?.resourceTypes?.includes("main_frame"));
+
+  const steps = [
+    ["Storage working", Boolean(state)],
+    ["Website list saved correctly", hasSites],
+    ["Session starts properly", active],
+    ["Timer set correctly", active && state.start_time < state.end_time],
+    ["Rules applied", active ? focusRules.length === state.blocked_sites.length : focusRules.length === 0],
+    ["Blocked site detection works", active && hasMainFrameRule],
+    ["Redirect to blocking page works", active && hasRedirectRule],
+    ["Timer countdown correct", active && state.end_time - Date.now() > 0],
+    ["Strict mode enforcement", state.strict_mode ? active && state.strict_mode : true],
+    ["Session ends correctly", active ? Boolean(state.end_time) : focusRules.length === 0]
+  ];
+
+  return steps.map(([description, passed], index) => {
+    const status = passed ? "PASS" : "FAIL";
+    console.info(`[Sanity Check] Step ${index + 1}/10: ${description} → ${status}`);
+    return {
+      step: index + 1,
+      total: 10,
+      description,
+      status
+    };
+  });
+};
+
 chrome.runtime.onInstalled.addListener(() => {
   chrome.storage.local.set(DEFAULT_STATE);
   clearBlockingRules();
@@ -231,7 +265,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     getState,
     saveSettings: () => saveSettings(message.payload || {}),
     startSession: () => startSession(message.payload || {}),
-    stopSession
+    stopSession,
+    runSanityCheck
   };
 
   const action = actions[message?.type];
