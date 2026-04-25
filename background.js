@@ -9,6 +9,8 @@ const DEFAULT_STATE = {
 
 const RULE_ID_OFFSET = 1000;
 const SESSION_ALARM = "focuslock-session-expiry";
+const LOCKED_KEYS = ["blocked_sites", "duration_minutes", "end_time", "session_active", "start_time", "strict_mode"];
+let strictRestoreInProgress = false;
 
 const getState = () => chrome.storage.local.get(DEFAULT_STATE);
 
@@ -149,6 +151,34 @@ const startSession = async ({ blocked_sites, duration_minutes, strict_mode }) =>
   return nextState;
 };
 
+const restoreStrictState = async (changes) => {
+  if (strictRestoreInProgress) {
+    return;
+  }
+
+  const currentState = await getState();
+  const oldState = { ...currentState };
+  for (const key of LOCKED_KEYS) {
+    if (changes[key]) {
+      oldState[key] = changes[key].oldValue;
+    }
+  }
+
+  if (!oldState.session_active || !oldState.strict_mode || !oldState.end_time || Date.now() >= oldState.end_time) {
+    return;
+  }
+
+  strictRestoreInProgress = true;
+  try {
+    await chrome.storage.local.set(oldState);
+    const restored = await getState();
+    await applyBlockingRules(restored);
+    await scheduleSessionExpiry(restored.end_time);
+  } finally {
+    strictRestoreInProgress = false;
+  }
+};
+
 const stopSession = async () => {
   const state = await getState();
   if (state.session_active && state.strict_mode) {
@@ -187,6 +217,12 @@ chrome.runtime.onStartup.addListener(() => {
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === SESSION_ALARM) {
     expireSession();
+  }
+});
+
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName === "local") {
+    restoreStrictState(changes);
   }
 });
 
