@@ -7,6 +7,8 @@ const DEFAULT_STATE = {
   session_active: false
 };
 
+const RULE_ID_OFFSET = 1000;
+
 const getState = () => chrome.storage.local.get(DEFAULT_STATE);
 
 const normalizeSite = (value) => value.trim().toLowerCase();
@@ -17,6 +19,67 @@ const normalizeSites = (sites) => {
   }
 
   return [...new Set(sites.map(normalizeSite).filter(Boolean))];
+};
+
+const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const getSiteRulePattern = (site) => {
+  try {
+    const withProtocol = /^[a-z][a-z\d+.-]*:\/\//i.test(site) ? site : `https://${site}`;
+    const url = new URL(withProtocol);
+    const host = escapeRegex(url.hostname.replace(/^www\./, ""));
+
+    if (/^[a-z][a-z\d+.-]*:\/\//i.test(site) && url.pathname !== "/") {
+      const path = escapeRegex(url.pathname.replace(/\/$/, ""));
+      return `^https?://([^/]+\\.)?${host}${path}(/|[?#]|$)`;
+    }
+
+    return `^https?://([^/]+\\.)?${host}([/:?#]|$)`;
+  } catch {
+    const cleaned = site.replace(/^www\./, "").replace(/^https?:\/\//, "").split("/")[0];
+    return `^https?://([^/]+\\.)?${escapeRegex(cleaned)}([/:?#]|$)`;
+  }
+};
+
+const getExistingRuleIds = async () => {
+  const rules = await chrome.declarativeNetRequest.getDynamicRules();
+  return rules.map((rule) => rule.id).filter((id) => id >= RULE_ID_OFFSET);
+};
+
+const clearBlockingRules = async () => {
+  const removeRuleIds = await getExistingRuleIds();
+  if (removeRuleIds.length) {
+    await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds });
+  }
+};
+
+const buildBlockingRules = (sites) =>
+  sites.map((site, index) => ({
+    id: RULE_ID_OFFSET + index,
+    priority: 1,
+    action: {
+      type: "redirect",
+      redirect: {
+        extensionPath: `/blocked.html?site=${encodeURIComponent(site)}`
+      }
+    },
+    condition: {
+      regexFilter: getSiteRulePattern(site),
+      resourceTypes: ["main_frame"]
+    }
+  }));
+
+const applyBlockingRules = async (state) => {
+  const removeRuleIds = await getExistingRuleIds();
+  const addRules =
+    state.session_active && state.end_time && Date.now() < state.end_time
+      ? buildBlockingRules(normalizeSites(state.blocked_sites))
+      : [];
+
+  await chrome.declarativeNetRequest.updateDynamicRules({
+    removeRuleIds,
+    addRules
+  });
 };
 
 const saveSettings = async ({ blocked_sites, duration_minutes, strict_mode }) => {
@@ -32,7 +95,9 @@ const saveSettings = async ({ blocked_sites, duration_minutes, strict_mode }) =>
     strict_mode: Boolean(strict_mode)
   });
 
-  return getState();
+  const nextState = await getState();
+  await applyBlockingRules(nextState);
+  return nextState;
 };
 
 const startSession = async ({ blocked_sites, duration_minutes, strict_mode }) => {
@@ -59,7 +124,9 @@ const startSession = async ({ blocked_sites, duration_minutes, strict_mode }) =>
     session_active: true
   });
 
-  return getState();
+  const nextState = await getState();
+  await applyBlockingRules(nextState);
+  return nextState;
 };
 
 const stopSession = async () => {
@@ -74,18 +141,24 @@ const stopSession = async () => {
     end_time: null
   });
 
+  await clearBlockingRules();
   return getState();
 };
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.storage.local.set(DEFAULT_STATE);
+  clearBlockingRules();
 });
 
 chrome.runtime.onStartup.addListener(() => {
-  chrome.storage.local.get(DEFAULT_STATE, (state) => {
+  chrome.storage.local.get(DEFAULT_STATE, async (state) => {
     if (!state.session_active || !state.end_time || Date.now() >= state.end_time) {
-      chrome.storage.local.set({ session_active: false });
+      await chrome.storage.local.set({ session_active: false });
+      await clearBlockingRules();
+      return;
     }
+
+    await applyBlockingRules(state);
   });
 });
 
