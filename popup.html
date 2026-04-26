@@ -24,15 +24,8 @@
 
       <section class="control-grid">
         <label class="field">
-          <span>Duration</span>
-          <select id="durationSelect">
-            <option value="15">15 min</option>
-            <option value="25" selected>25 min</option>
-            <option value="45">45 min</option>
-            <option value="60">60 min</option>
-            <option value="90">90 min</option>
-            <option value="120">120 min</option>
-          </select>
+          <span>Duration in minutes</span>
+          <input id="durationSelect" type="number" min="1" max="1440" step="1" value="25" inputmode="numeric">
         </label>
 
         <label class="toggle-row" for="strictToggle">
