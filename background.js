@@ -14,7 +14,23 @@ let strictRestoreInProgress = false;
 
 const getState = () => chrome.storage.local.get(DEFAULT_STATE);
 
-const normalizeSite = (value) => value.trim().toLowerCase();
+const normalizeSite = (value) => {
+  const trimmed = value.trim().toLowerCase();
+  if (!trimmed) {
+    return "";
+  }
+
+  try {
+    const withProtocol = /^[a-z][a-z\d+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+    const url = new URL(withProtocol);
+    return url.hostname.replace(/^www\./, "");
+  } catch {
+    return trimmed
+      .replace(/^https?:\/\//, "")
+      .replace(/^www\./, "")
+      .split(/[/?#]/)[0];
+  }
+};
 
 const normalizeSites = (sites) => {
   if (!Array.isArray(sites)) {
@@ -31,11 +47,6 @@ const getSiteRulePattern = (site) => {
     const withProtocol = /^[a-z][a-z\d+.-]*:\/\//i.test(site) ? site : `https://${site}`;
     const url = new URL(withProtocol);
     const host = escapeRegex(url.hostname.replace(/^www\./, ""));
-
-    if (/^[a-z][a-z\d+.-]*:\/\//i.test(site) && url.pathname !== "/") {
-      const path = escapeRegex(url.pathname.replace(/\/$/, ""));
-      return `^https?://([^/]+\\.)?${host}${path}(/|[?#]|$)`;
-    }
 
     return `^https?://([^/]+\\.)?${host}([/:?#]|$)`;
   } catch {
